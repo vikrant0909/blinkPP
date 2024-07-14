@@ -1,65 +1,51 @@
-// Libraries for Blynk and ESP32
 #define BLYNK_TEMPLATE_ID "TMPL3MdS2XcWX"
 #define BLYNK_TEMPLATE_NAME "Pen Plotter"
 #define BLYNK_AUTH_TOKEN "vUK8bHLceN0l-g08_OSmzZXCMdPt_CO3"
 
+// Include necessary libraries
 #include <Wire.h>
-#include <SCMD.h>
+#include <SCMD.h> // Correct library for the SparkFun Serial Controlled Motor Driver
 #include <BlynkSimpleEsp32.h>
 #include <ESP32Servo.h>
-#include <LiquidCrystal_I2C.h>
 
-// WiFi credentials
+// Auth Token from Blynk
+char auth[] = BLYNK_AUTH_TOKEN;
+
+// Your WiFi credentials
 char ssid[] = "Hotspot";
 char pass[] = "Akhil@123";
 
-// Motor driver setup
+// Define motor driver object
 SCMD motorDriver;
-Servo myServo;
-Servo penServo; // Declare pen servo motor
-
-#define SERVO_PIN 11
 
 // Motor channels
 #define MOTOR1 0
 #define MOTOR2 1
 
-// LED pin
-#define LED_PIN 12
+// Define LED pins
+#define LED_RED_PIN 12
+#define LED_YELLOW_PIN 13
 
-// LCD setup
-LiquidCrystal_I2C lcd(0x27, 16, 2);
+// Define servo motor
+Servo myServo;
+#define SERVO_PIN 11
 
-// Pen plotter constants and variables
-#define X_AXIS_MOTOR 1
-#define Y_AXIS_MOTOR 0
-#define X_LIMIT_SWITCH_LEFT 14
-#define Y_LIMIT_SWITCH_BACK 15
-#define RED_LED 13
-#define YELLOW_LED 12
-#define PEN_SERVO_PIN 11
-
-#define MOTOR_SPEED 100
-#define MOTOR_SPEEDX 107
-#define MOTOR_SPEED_SLOW 107
-int diagonalSpeedX = 102;
-int diagonalSpeedY = 101;
-int diagonalSpeedX1 = 95;
-int diagonalSpeedY1 = 99;
-
-// Blynk authentication token
-char auth[] = BLYNK_AUTH_TOKEN;
+// Define limit switch pins
+#define Y_FRONT_LIMIT_PIN 8
+#define Y_BACK_LIMIT_PIN 10
+#define X_LEFT_LIMIT_PIN 4
+#define X_RIGHT_LIMIT_PIN 6
 
 void setup() {
-  // Initialize serial communication for debugging
+  // Initialize the serial communication for debugging
   Serial.begin(115200);
   Serial.println("Serial communication started.");
 
-  // Initialize I2C bus
+  // Initialize the I2C bus
   Wire.begin();
   Serial.println("I2C bus initialized.");
 
-  // Initialize motor driver
+  // Initialize the motor driver
   Serial.println("Initializing motor driver...");
   motorDriver.settings.commInterface = I2C_MODE;
   motorDriver.settings.I2CAddress = 0x5D;
@@ -68,27 +54,36 @@ void setup() {
     delay(500);
   }
   Serial.println("ID matches 0xA9");
+
   while (motorDriver.ready() == false) {
     Serial.println("Waiting for Motor Driver to be ready...");
     delay(500);
   }
   Serial.println("Motor Driver Ready.");
+
   while (motorDriver.busy());
-  motorDriver.enable(); 
+  motorDriver.enable(); // Enable the motor driver
 
-  // Initialize LED pin
-  pinMode(LED_PIN, OUTPUT);
-  digitalWrite(LED_PIN, LOW);
-  Serial.println("LED pin initialized.");
+  // Debugging message
+  Serial.println("Motor Driver enabled.");
 
-  // Initialize servo motors
+  // Initialize LED pins
+  pinMode(LED_RED_PIN, OUTPUT);
+  digitalWrite(LED_RED_PIN, LOW);  // Initially off
+  pinMode(LED_YELLOW_PIN, OUTPUT);
+  digitalWrite(LED_YELLOW_PIN, LOW);  // Initially off
+  Serial.println("LED pins initialized.");
+
+  // Initialize servo motor
   myServo.attach(SERVO_PIN);
-  penServo.attach(PEN_SERVO_PIN); // Attach pen servo motor
-  Serial.println("Servo motors initialized.");
+  Serial.println("Servo motor initialized.");
 
-  // Initialize LCD
-  lcd.begin();
-  lcd.backlight();
+  // Initialize limit switch pins
+  pinMode(Y_FRONT_LIMIT_PIN, INPUT_PULLUP);
+  pinMode(Y_BACK_LIMIT_PIN, INPUT_PULLUP);
+  pinMode(X_LEFT_LIMIT_PIN, INPUT_PULLUP);
+  pinMode(X_RIGHT_LIMIT_PIN, INPUT_PULLUP);
+  Serial.println("Limit switches initialized.");
 
   // Start Blynk
   Serial.println("Connecting to Blynk...");
@@ -96,27 +91,29 @@ void setup() {
   Serial.println("Connected to Blynk.");
 }
 
-// Blynk functions to control motors and servo
+// Function to control motor 1 speed from Blynk
 BLYNK_WRITE(V1) {
   int speed = param.asInt();
-  uint8_t direction = speed >= 0 ? 0 : 1;
-  motorDriver.setDrive(MOTOR1, direction, abs(speed));
+  uint8_t direction = speed >= 0 ? 0 : 1; // 0 for forward, 1 for reverse
+  motorDriver.setDrive(MOTOR1, direction, abs(speed)); // Channel 0 for motor 1
   Serial.print("Motor 1 Speed: ");
   Serial.print(speed);
   Serial.print(" Direction: ");
   Serial.println(direction == 0 ? "Forward" : "Reverse");
 }
 
+// Function to control motor 2 speed from Blynk
 BLYNK_WRITE(V2) {
   int speed = param.asInt();
-  uint8_t direction = speed >= 0 ? 0 : 1;
-  motorDriver.setDrive(MOTOR2, direction, abs(speed));
+  uint8_t direction = speed >= 0 ? 0 : 1; // 0 for forward, 1 for reverse
+  motorDriver.setDrive(MOTOR2, direction, abs(speed)); // Channel 1 for motor 2
   Serial.print("Motor 2 Speed: ");
   Serial.print(speed);
   Serial.print(" Direction: ");
   Serial.println(direction == 0 ? "Forward" : "Reverse");
 }
 
+// Function to control servo from Blynk V0
 BLYNK_WRITE(V0) {
   int value = param.asInt();
   myServo.write(value);
@@ -124,126 +121,52 @@ BLYNK_WRITE(V0) {
   Serial.println(value);
 }
 
+// Function to control LED from Blynk V4
 BLYNK_WRITE(V4) {
   int value = param.asInt();
-  digitalWrite(LED_PIN, value);
+  digitalWrite(LED_RED_PIN, value);
   Serial.print("LED State: ");
   Serial.println(value == HIGH ? "ON" : "OFF");
 }
 
-// Function to draw Nikolaus house
-void drawNikolausHouse() {
-  float startX = 0;
-  float startY = 0;
-
-  digitalWrite(RED_LED, LOW);
-  digitalWrite(YELLOW_LED, HIGH);
-
-  lcd.clear();
-  lcd.setCursor(0, 0);
-  lcd.print("Starting Drawing");
-  lcd.setCursor(0, 1);
-  lcd.print("Nikolaus House...");
-
-  moveToSimultaneously(startX, startY, startX - 50, startY - 50, MOTOR_SPEEDX, MOTOR_SPEED);
-  delay(1000);
-  moveToSimultaneously(startX - 50, startY - 50, startX - 50, startY - 100, MOTOR_SPEEDX, MOTOR_SPEED);
-  delay(1000);
-  penDown();
-  lcd.clear();
-  lcd.setCursor(0, 0);
-  lcd.print("Drawing Nikolaus");
-  lcd.setCursor(0, 1);
-  lcd.print("House.");
-  delay(1000);
-  moveToSimultaneously(startX - 50, startY - 100, startX - 100, startY - 100, MOTOR_SPEEDX, MOTOR_SPEED);
-  delay(1000);
-  moveToSimultaneously(startX - 100, startY - 100, startX - 100, startY - 50, MOTOR_SPEEDX, MOTOR_SPEED);
-  delay(1000);
-  lcd.clear();
-  lcd.setCursor(0, 0);
-  lcd.print("Drawing Nikolaus");
-  lcd.setCursor(0, 1);
-  lcd.print("House..");
-  moveToSimultaneously(startX - 100, startY - 50, startX - 75, startY - 25, diagonalSpeedX, diagonalSpeedY);
-  delay(1000);
-  moveToSimultaneously(startX - 75, startY - 25, startX - 50, startY - 50, diagonalSpeedX, diagonalSpeedY);
-  delay(1000);
-  moveToSimultaneously(startX - 50, startY - 50, startX - 100, startY - 50, MOTOR_SPEEDX, MOTOR_SPEED);
-  delay(1000);
-  lcd.clear();
-  lcd.setCursor(0, 0);
-  lcd.print("Drawing Nikolaus");
-  lcd.setCursor(0, 1);
-  lcd.print("House...");
-  moveToSimultaneously(startX - 100, startY - 50, startX - 50, startY - 100, diagonalSpeedX1, diagonalSpeedY1);
-  delay(1000);
-  moveToSimultaneously(startX - 50, startY - 100, startX - 50, startY - 50, MOTOR_SPEEDX, MOTOR_SPEED);
-  delay(1000);
-  moveToSimultaneously(startX - 50, startY - 50, startX - 100, startY - 100, diagonalSpeedX1, diagonalSpeedY1);
-  delay(1000);
-  penUp();
-  delay(1000);
-  lcd.clear();
-  lcd.setCursor(0, 0);
-  lcd.print("HOUSE BUILT!");
-  delay(1000);
-  digitalWrite(RED_LED, HIGH);
-  digitalWrite(YELLOW_LED, LOW);
-}
-
-// Function to move motors simultaneously
-void moveToSimultaneously(int startX, int startY, int endX, int endY, int speedX, int speedY) {
-  Serial.print("Moving to coordinates: ");
-  Serial.print(endX);
-  Serial.print(", ");
-  Serial.println(endY);
-
-  int deltaX = endX - startX;
-  int deltaY = endY - startY;
-  int steps = max(abs(deltaX), abs(deltaY));
-  float stepX = deltaX / (float)steps;
-  float stepY = deltaY / (float)steps;
-
-  bool isDiagonal = (deltaX != 0 && deltaY != 0);
-
-  for (int i = 0; i < steps; i++) {
-    int currentSpeedX = isDiagonal ? speedX : MOTOR_SPEEDX;
-    int currentSpeedY = isDiagonal ? speedY : MOTOR_SPEED;
-
-    if (stepX != 0) {
-      motorDriver.setDrive(X_AXIS_MOTOR, stepX > 0 ? 0 : 1, currentSpeedX);
-    }
-
-    if (stepY != 0) {
-      motorDriver.setDrive(Y_AXIS_MOTOR, stepY > 0 ? 1 : 0, currentSpeedY);
-    }
-
-    delay(10);
-    motorDriver.setDrive(X_AXIS_MOTOR, 0, 0);
-    motorDriver.setDrive(Y_AXIS_MOTOR, 0, 0);
-
-    startX += stepX;
-    startY += stepY;
-  }
-
-  Serial.println("Movement complete");
-}
-
-// Function to raise pen
-void penUp() {
-  penServo.write(110);
-  delay(1000);
-  Serial.println("Pen up");
-}
-
-// Function to lower pen
-void penDown() {
-  penServo.write(0);
-  delay(1000);
-  Serial.println("Pen down");
-}
-
 void loop() {
   Blynk.run();
+
+  // Check Y-axis limit switches
+  if (digitalRead(Y_FRONT_LIMIT_PIN) == LOW) {
+    // Y-axis front limit switch is pressed
+    motorDriver.setDrive(MOTOR1, 1, 0); // Stop motor 1 (reverse to stop)
+    Serial.println("Y-axis front limit reached.");
+  }
+  if (digitalRead(Y_BACK_LIMIT_PIN) == LOW) {
+    // Y-axis back limit switch is pressed
+    motorDriver.setDrive(MOTOR1, 0, 0); // Stop motor 1 (forward to stop)
+    Serial.println("Y-axis back limit reached.");
+  }
+
+  // Check X-axis limit switches
+  if (digitalRead(X_LEFT_LIMIT_PIN) == LOW) {
+    // X-axis left limit switch is pressed
+    motorDriver.setDrive(MOTOR2, 1, 0); // Stop motor 2 (reverse to stop)
+    Serial.println("X-axis left limit reached.");
+  }
+  if (digitalRead(X_RIGHT_LIMIT_PIN) == LOW) {
+    // X-axis right limit switch is pressed
+    motorDriver.setDrive(MOTOR2, 0, 0); // Stop motor 2 (forward to stop)
+    Serial.println("X-axis right limit reached.");
+  }
+
+  // Check if any limit switch is active and stop corresponding motors
+  if (digitalRead(Y_FRONT_LIMIT_PIN) == LOW || digitalRead(Y_BACK_LIMIT_PIN) == LOW ||
+      digitalRead(X_LEFT_LIMIT_PIN) == LOW || digitalRead(X_RIGHT_LIMIT_PIN) == LOW) {
+    // At least one limit switch is active
+    digitalWrite(LED_RED_PIN, LOW);   // Red LED off
+    digitalWrite(LED_YELLOW_PIN, HIGH);  // Yellow LED on
+  } else {
+    // No limit switch active
+    digitalWrite(LED_RED_PIN, HIGH);  // Red LED on
+    digitalWrite(LED_YELLOW_PIN, LOW);   // Yellow LED off
+  }
+
+  delay(10); // Small delay to prevent excessive loop iteration
 }
